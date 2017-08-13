@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 input = open('adf3.out','r')
 next = False
 num_list = list()

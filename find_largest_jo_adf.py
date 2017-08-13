@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from datetime import datetime
 
 input = open('jo_adf_3.txt','r')
