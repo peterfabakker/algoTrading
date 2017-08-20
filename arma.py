@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-
-
-
 import datetime
 import quandl
 import pandas as pd

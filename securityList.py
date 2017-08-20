@@ -2,31 +2,55 @@
 
 import quandl
 import numpy as np
+import pandas as pd
+import datetime
 import statsmodels.tsa.johansen as jh
+import matplotlib.pyplot as plt
 
 quandl.ApiConfig.api_key = 'AfS6bPzj1CsRFyYxCcvz'
 
 class SecurityList():
 
-	def __init__(self,tickers=None,data=list()):
-		self.tickers = tickers
-		self.data = data
+    def __init__(self,tickers):
+            self.tickers = tickers
+            self.data = pd.DataFrame(columns=self.tickers)
+            self.volume = pd.DataFrame(columns=self.tickers)
 
-	def downloadQuandl(self,start,end):
+    def downloadQuandl(self,start,end):
+                
+        def convert_dt(elem):
+            return pd.to_datetime(elem).date()
+        for sec in self.tickers:
+            a = quandl.get('WIKI/'+sec, start_date=start,end_date=end)
+            self.data[sec] = a['Adj. Close']
+            self.volume[sec] = a['Volume']
+            f = np.vectorize(convert_dt)
+            index = f(a.index)
+        self.data = self.data.set_index(index)
+        self.volume = self.volume.set_index(index)
+        
+    def genTimeSeries(self):
 
-		for sec in self.tickers:
-			a = quandl.get('WIKI/'+sec, returns="numpy",start_date=start,end_date=end)
-			self.data.append(a['Adj. Close'])
+        '''
+        Generate Time Series using johansen test
+        '''
+        eig = self.genHedgeRatio()
+        ts = np.dot(self.data,eig)
+        return ts,eig,self.data
 
-	def genTimeSeries(self):
+    def genHedgeRatio(self):
+                    
+        matrix = self.genMatrix()
+        results = jh.coint_johansen(matrix,0,1)
+        return results.evec[:,0]
+        
+    def genMatrix(self):
 
-		'''
-		Generate Time Series using johansen test
-		'''
-		ts_length = len(self.data[0])
-		matrix = np.zeros((ts_length,len(self.tickers)))
-		for i,sec in enumerate(self.data):
-			matrix[:,i] = sec
-		results = jh.coint_johansen(matrix,0,1)
-		ts = np.dot(matrix,results.evec[:,0])
-		return ts
+        ts_row,ts_col = self.data.shape
+        matrix = np.zeros((ts_row,ts_col))
+        for i, sec in enumerate(self.data):
+            matrix[:,i] = self.data[sec]
+        return matrix
+
+    def getVolume(self):
+        return self.volume

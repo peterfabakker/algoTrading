@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-#import bollinger_pair_johansen as bpj
+#import bpjtest as bpj
 import cPickle as pickle
 import matplotlib.pyplot as plt
 import numpy as np
