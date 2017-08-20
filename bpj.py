@@ -128,16 +128,16 @@ def place_orders(context,data):
     zscore = (current_price-context.avg)/context.std
  
     if context.long == True and zscore >= 0:
-        orderPortfolio(order='exit')
+        orderPortfolio(order_type='exit')
         context.long = False
     elif context.short == True and zscore <= 0:
-        orderPortfolio(order='exit')
+        orderPortfolio(order_type='exit')
         context.short = False
     elif context.short == False and zscore >= 2:
-        orderPortfolio(order='short')
+        orderPortfolio(order_type='short')
         context.short= True
     elif context.long == False and zscore <= 2:
-        orderPortfolio(order='long')
+        orderPortfolio(order_type='long')
         context.long= True
 
 eastern = pytz.timezone('US/Eastern')        
