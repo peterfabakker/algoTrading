@@ -33,13 +33,54 @@ def save_cookies(context):
     print(f"[{time.strftime('%H:%M:%S')}] Saved {len(cookies)} cookies to {COOKIE_FILE}")
 
 
+def convert_cookie_for_playwright(cookie):
+    """Convert browser extension cookie format to Playwright format."""
+    # Map sameSite values from browser extensions to Playwright
+    same_site_map = {
+        "no_restriction": "None",
+        "unspecified": "Lax",
+        "lax": "Lax",
+        "strict": "Strict",
+        "none": "None",
+    }
+
+    # Build Playwright-compatible cookie
+    pw_cookie = {
+        "name": cookie["name"],
+        "value": cookie["value"],
+        "domain": cookie["domain"],
+        "path": cookie.get("path", "/"),
+    }
+
+    # Handle sameSite
+    same_site = cookie.get("sameSite", "Lax")
+    if isinstance(same_site, str):
+        pw_cookie["sameSite"] = same_site_map.get(same_site.lower(), "Lax")
+
+    # Handle expiration (browser uses expirationDate, Playwright uses expires)
+    if "expirationDate" in cookie:
+        pw_cookie["expires"] = cookie["expirationDate"]
+    elif "expires" in cookie:
+        pw_cookie["expires"] = cookie["expires"]
+
+    # Optional fields
+    if cookie.get("secure"):
+        pw_cookie["secure"] = True
+    if cookie.get("httpOnly"):
+        pw_cookie["httpOnly"] = True
+
+    return pw_cookie
+
+
 def load_cookies(context):
     """Load cookies from file if they exist."""
     if COOKIE_FILE.exists():
         try:
             cookies = json.loads(COOKIE_FILE.read_text())
-            context.add_cookies(cookies)
-            print(f"Loaded {len(cookies)} cookies from {COOKIE_FILE}")
+            # Convert cookies to Playwright format
+            pw_cookies = [convert_cookie_for_playwright(c) for c in cookies]
+            context.add_cookies(pw_cookies)
+            print(f"Loaded {len(pw_cookies)} cookies from {COOKIE_FILE}")
             return True
         except (json.JSONDecodeError, Exception) as e:
             print(f"Failed to load cookies: {e}")
