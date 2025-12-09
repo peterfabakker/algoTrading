@@ -2,8 +2,20 @@
 """
 AFR Session Keeper - Refreshes page periodically to maintain session cookie
 Stores cookie in /codeload/config/cookie.txt
+
+Usage:
+    Interactive mode (first time login):
+        python afr_session_keeper.py --interactive
+
+    Single refresh (for cron):
+        python afr_session_keeper.py --once
+
+    Continuous mode:
+        python afr_session_keeper.py --loop
 """
+import argparse
 import json
+import sys
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -34,15 +46,45 @@ def load_cookies(context):
     return False
 
 
-def main():
+def run_once(headless=True):
+    """Single refresh - suitable for cron jobs."""
+    if not COOKIE_FILE.exists():
+        print(f"ERROR: No cookie file found at {COOKIE_FILE}")
+        print("Run with --interactive first to log in and create cookies.")
+        return 1
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=headless)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        if not load_cookies(context):
+            print("ERROR: Failed to load cookies")
+            browser.close()
+            return 1
+
+        page = context.new_page()
+        try:
+            page.goto(AFR_URL, wait_until="networkidle", timeout=60000)
+            save_cookies(context)
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Session refreshed successfully")
+            browser.close()
+            return 0
+        except Exception as e:
+            print(f"ERROR: {e}")
+            browser.close()
+            return 1
+
+
+def run_interactive():
+    """Interactive mode for initial login."""
     print("=" * 50)
-    print("AFR Session Keeper")
+    print("AFR Session Keeper - Interactive Login")
     print(f"Cookie file: {COOKIE_FILE}")
-    print(f"Refresh interval: {REFRESH_INTERVAL} seconds")
     print("=" * 50)
 
     with sync_playwright() as p:
-        # Launch browser (set headless=True after initial login works)
         browser = p.chromium.launch(headless=False)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -60,17 +102,44 @@ def main():
             print("Please log in with Apple ID in the browser window...")
             print("Press Enter here once you're logged in...")
             print("=" * 50)
-            input()
         else:
-            # Check if we're actually logged in
-            time.sleep(3)
-            print("\nChecking login status...")
-            # Give user a chance to verify
-            print("If you're NOT logged in, please log in now and press Enter.")
-            print("If you ARE logged in, just press Enter to start auto-refresh.")
-            input()
+            print("\nCookies loaded. Verify you're logged in.")
+            print("If not, please log in now.")
+            print("Press Enter when ready to save cookies...")
 
-        # Save cookies after login
+        input()
+        save_cookies(context)
+        browser.close()
+        print("\nDone! You can now use --once for cron jobs.")
+        return 0
+
+
+def run_loop():
+    """Continuous refresh mode."""
+    if not COOKIE_FILE.exists():
+        print(f"ERROR: No cookie file found at {COOKIE_FILE}")
+        print("Run with --interactive first to log in and create cookies.")
+        return 1
+
+    print("=" * 50)
+    print("AFR Session Keeper - Continuous Mode")
+    print(f"Cookie file: {COOKIE_FILE}")
+    print(f"Refresh interval: {REFRESH_INTERVAL} seconds")
+    print("=" * 50)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        if not load_cookies(context):
+            print("ERROR: Failed to load cookies")
+            browser.close()
+            return 1
+
+        page = context.new_page()
+        page.goto(AFR_URL, wait_until="networkidle")
         save_cookies(context)
 
         print(f"\nStarting auto-refresh every {REFRESH_INTERVAL} seconds...")
@@ -99,6 +168,38 @@ def main():
 
         browser.close()
         print("Done. Cookies saved.")
+        return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="AFR Session Keeper - Maintain login session cookies"
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--interactive", "-i",
+        action="store_true",
+        help="Interactive mode: opens browser for manual login"
+    )
+    group.add_argument(
+        "--once", "-o",
+        action="store_true",
+        help="Single refresh: load cookies, refresh page, save cookies (for cron)"
+    )
+    group.add_argument(
+        "--loop", "-l",
+        action="store_true",
+        help="Continuous mode: keep refreshing in a loop"
+    )
+
+    args = parser.parse_args()
+
+    if args.interactive:
+        sys.exit(run_interactive())
+    elif args.once:
+        sys.exit(run_once())
+    elif args.loop:
+        sys.exit(run_loop())
 
 
 if __name__ == "__main__":
